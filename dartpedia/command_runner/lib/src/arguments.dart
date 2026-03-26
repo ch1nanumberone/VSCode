@@ -80,9 +80,13 @@ abstract class Command extends Argument {
   UnmodifiableSetView<Option> get options =>
       UnmodifiableSetView(_options.toSet());
 
-  // Добавить флаг (boolean)
-  void addFlag(String name,
-      {String? help, String? abbr, String? valueHelp}) {
+  // Добавить флаг
+  void addFlag(
+    String name, {
+    String? help,
+    String? abbr,
+    String? valueHelp,
+  }) {
     _options.add(
       Option(
         name,
@@ -95,7 +99,7 @@ abstract class Command extends Argument {
     );
   }
 
-  // Добавить опцию со значением
+  // Добавить опцию
   void addOption(
     String name, {
     String? help,
@@ -119,9 +123,7 @@ abstract class Command extends Argument {
   FutureOr<Object?> run(ArgResults args);
 
   @override
-  String get usage {
-    return '$name: $description';
-  }
+  String get usage => '$name: $description';
 }
 
 // ================= ARG RESULTS =================
@@ -130,4 +132,34 @@ class ArgResults {
   String? commandArg;
 
   Map<Option, Object?> options = {};
+
+  // ===== FLAG =====
+  bool flag(String name) {
+    final entry = options.entries.where(
+      (e) => e.key.name == name,
+    );
+
+    if (entry.isEmpty) return false;
+
+    return entry.first.value == true;
+  }
+
+  // ===== HAS OPTION =====
+  bool hasOption(String name) {
+    return options.keys.any((o) => o.name == name);
+  }
+
+  // ===== GET OPTION =====
+  ({Option option, String? input})? getOption(String name) {
+    final entry = options.entries.where(
+      (e) => e.key.name == name,
+    );
+
+    if (entry.isEmpty) return null;
+
+    return (
+      option: entry.first.key,
+      input: entry.first.value?.toString(),
+    );
+  }
 }

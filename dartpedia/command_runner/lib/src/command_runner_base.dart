@@ -6,14 +6,15 @@ import 'arguments.dart';
 import 'exceptions.dart';
 
 class CommandRunner {
-  CommandRunner({this.onError});
+  CommandRunner({this.onOutput, this.onError});
 
-  final Map<String, Command> _commands = <String, Command>{};
+  final Map<String, Command> _commands = {};
+
+  FutureOr<void> Function(String)? onOutput;
+  FutureOr<void> Function(Object)? onError;
 
   UnmodifiableSetView<Command> get commands =>
-      UnmodifiableSetView<Command>(<Command>{..._commands.values});
-
-  FutureOr<void> Function(Object)? onError;
+      UnmodifiableSetView(_commands.values.toSet());
 
   // ===== usage =====
   String get usage {
@@ -34,6 +35,35 @@ class CommandRunner {
     command.runner = this;
   }
 
+  // ===== parse =====
+  ArgResults parse(List<String> input) {
+    final command = _commands[input.first]!;
+
+    final results = ArgResults()
+      ..command = command;
+
+    for (int i = 1; i < input.length; i++) {
+      final arg = input[i];
+
+      for (final option in command.options) {
+        if (arg == '--${option.name}' ||
+            (option.abbr != null && arg == '-${option.abbr}')) {
+
+          if (option.type == OptionType.flag) {
+            results.options[option] = true;
+          } else {
+            if (i + 1 < input.length) {
+              results.options[option] = input[i + 1];
+              i++;
+            }
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
   // ===== run =====
   Future<void> run(List<String> input) async {
     try {
@@ -47,14 +77,16 @@ class CommandRunner {
         throw ArgumentException('Unknown command: ${input.first}');
       }
 
-      final results = ArgResults()
-        ..command = command
-        ..commandArg = input.length > 1 ? input[1] : null;
+      final results = parse(input);
 
       final output = await command.run(results);
 
       if (output != null) {
-        print(output);
+        if (onOutput != null) {
+          await onOutput!(output.toString());
+        } else {
+          print(output);
+        }
       }
     } on Exception catch (exception) {
       if (onError != null) {
