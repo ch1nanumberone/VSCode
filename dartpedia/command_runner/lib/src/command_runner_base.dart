@@ -1,39 +1,67 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
+
 import 'arguments.dart';
+import 'exceptions.dart';
 
 class CommandRunner {
+  CommandRunner({this.onError});
+
   final Map<String, Command> _commands = <String, Command>{};
 
   UnmodifiableSetView<Command> get commands =>
       UnmodifiableSetView<Command>(<Command>{..._commands.values});
 
-  Future<void> run(List<String> input) async {
-    final ArgResults results = parse(input);
-    if (results.command != null) {
-      Object? output = await results.command!.run(results);
-      print(output.toString());
+  FutureOr<void> Function(Object)? onError;
+
+  // ===== usage =====
+  String get usage {
+    final buffer = StringBuffer();
+
+    buffer.writeln('Available commands:\n');
+
+    for (final command in _commands.values) {
+      buffer.writeln('  ${command.name} - ${command.description}');
     }
+
+    return buffer.toString();
   }
 
+  // ===== addCommand =====
   void addCommand(Command command) {
-    // TODO: handle error (Commands can't have names that conflict)
     _commands[command.name] = command;
     command.runner = this;
   }
 
-  ArgResults parse(List<String> input) {
-    var results = ArgResults();
-    results.command = _commands[input.first];
-    return results;
-  }
+  // ===== run =====
+  Future<void> run(List<String> input) async {
+    try {
+      if (input.isEmpty) {
+        throw ArgumentException('No command provided.');
+      }
 
-  // Returns usage for the executable only.
-  // Should be overridden if you aren't using [HelpCommand]
-  // or another means of printing usage.
+      final command = _commands[input.first];
 
-  String get usage {
-    final exeFile = Platform.script.path.split('/').last;
-    return 'Usage: dart bin/$exeFile <command> [commandArg?] [...options?]';
+      if (command == null) {
+        throw ArgumentException('Unknown command: ${input.first}');
+      }
+
+      final results = ArgResults()
+        ..command = command
+        ..commandArg = input.length > 1 ? input[1] : null;
+
+      final output = await command.run(results);
+
+      if (output != null) {
+        print(output);
+      }
+    } on Exception catch (exception) {
+      if (onError != null) {
+        await onError!(exception);
+      } else {
+        rethrow;
+      }
+    }
   }
 }
